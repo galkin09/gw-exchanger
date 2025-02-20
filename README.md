@@ -26,7 +26,7 @@
 
 2. Клонируй репозиторий:
    ```bash
-   git clone https://github.com/galkin09/gw-exchange.git
+   git clone https://github.com/galkin09/gw-exchanger.git
    cd gw-exchange
 3. Установи зависимости:
     ```bash
