@@ -33,7 +33,7 @@
    go mod download
 4.  Измени файл .env, если необходимо на свои вводные
 5. Запусти PostgreSQL
-6. 
+6. Запусти приложение
 
     ```bash 
    go run main.go
