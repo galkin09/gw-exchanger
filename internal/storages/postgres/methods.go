@@ -35,6 +35,7 @@ func (p *PSQL) GetExchangeRates(ctx context.Context) (map[string]float32, error)
 	return rates, nil
 }
 
+// GetExchangeRateForCurrency Реализация интерфейса Storage
 func (p *PSQL) GetExchangeRateForCurrency(ctx context.Context, from, to string) (float32, error) {
 
 	const op = "GetExchangeRateForCurrency"
