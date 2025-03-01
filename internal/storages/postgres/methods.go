@@ -65,7 +65,7 @@ func (p *PSQL) GetExchangeRateForCurrency(ctx context.Context, from, to string) 
 	}
 
 	// Вычисляем курс между валютами
-	rate := fromRate / toRate
+	rate := toRate / fromRate
 	logger.Info("Запрос для валютной пары завершен успешно", "op", op)
 	return rate, nil
 }
