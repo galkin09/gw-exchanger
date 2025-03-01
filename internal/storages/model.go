@@ -15,6 +15,6 @@ type CurrencyRequest struct {
 // CurrencyResponse представляет ответ с курсом валюты
 type CurrencyResponse struct {
 	From string  `json:"from_currency"` // Исходная валюта
-	To   string  `json:"to_currency""`  // Целевая валюта
+	To   string  `json:"to_currency"`   // Целевая валюта
 	Rate float32 `json:"rate"`          // Курс обмена
 }

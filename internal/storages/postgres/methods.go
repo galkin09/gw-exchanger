@@ -43,16 +43,25 @@ func (p *PSQL) GetExchangeRateForCurrency(ctx context.Context, from, to string) 
 
 	var fromRate, toRate float32
 
-	// Получаем курс для обеих валют относительно USD
-	err := p.pool.QueryRow(ctx, "SELECT rate_to_usd FROM currencies WHERE currency_code=$1", from).Scan(&fromRate)
+	// Используем один запрос для получения курсов обеих валют
+	query := `
+        SELECT 
+            MAX(CASE WHEN currency_code = $1 THEN rate_to_usd END) AS from_rate,
+            MAX(CASE WHEN currency_code = $2 THEN rate_to_usd END) AS to_rate
+        FROM currencies
+        WHERE currency_code IN ($1, $2)
+    `
+
+	err := p.pool.QueryRow(ctx, query, from, to).Scan(&fromRate, &toRate)
 	if err != nil {
-		logger.Error("Ошибка выполнения запроса для валютной пары", err) // Логируем ошибку
-		return 0, fmt.Errorf("%s: ошибка получения курса для %s: %w", op, from, err)
+		logger.Error("Ошибка выполнения запроса для валютной пары", err)
+		return 0, fmt.Errorf("%s: ошибка получения курса для пары %s/%s: %w", op, from, to, err)
 	}
 
-	err = p.pool.QueryRow(ctx, "SELECT rate_to_usd FROM currencies WHERE currency_code=$1", to).Scan(&toRate)
-	if err != nil {
-		return 0, fmt.Errorf("%s: ошибка получения курса для %s: %w", op, to, err)
+	// Проверяем, что курсы были найдены
+	if fromRate == 0 || toRate == 0 {
+		logger.Error("Курс для одной из валют не найден", err)
+		return 0, fmt.Errorf("%s: курс для одной из валют (%s/%s) не найден", op, from, to)
 	}
 
 	// Вычисляем курс между валютами
