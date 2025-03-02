@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    image: gw-exchanger
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9091:9091"
+    env_file:
+      - config.env
+    depends_on:
+      db_exchange:
+        condition: service_healthy
+    networks:
+      - mynetwork
+
+  db_exchange:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: exchange_db
+    ports:
+      - "5433:5432"  # Порт 5433 на хосте, 5432 в контейнере
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/storages/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d exchange_db"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - mynetwork
+
+volumes:
+  postgres_data:
+
+networks:
+  mynetwork:
+    external: true

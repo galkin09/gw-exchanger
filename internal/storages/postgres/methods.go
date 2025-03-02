@@ -3,18 +3,18 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 )
 
 // GetExchangeRates Реализация интерфейса Storage
 func (p *PSQL) GetExchangeRates(ctx context.Context) (map[string]float32, error) {
 	const op = "GetExchangeRates psql"
 
-	logger := p.logger.With("op", op)
-	logger.Info("Запрос на получение курсов валют")
+	p.logger.Info("Запрос на получение курсов валют")
 
 	rows, err := p.pool.Query(ctx, "SELECT currency_code, rate_to_usd FROM currencies")
 	if err != nil {
-		logger.Error("Ошибка выполнения запроса", err)
+		p.logger.Error("Ошибка выполнения запроса", zap.Error(err))
 		return nil, fmt.Errorf("ошибка выполнения запроса: %w", err)
 	}
 	defer rows.Close()
@@ -25,13 +25,13 @@ func (p *PSQL) GetExchangeRates(ctx context.Context) (map[string]float32, error)
 		var rateToUSD float32
 		if err := rows.Scan(&currencyCode, &rateToUSD); err != nil {
 
-			logger.Error("Ошибка сканирования строки", err) // Логируем ошибку
+			p.logger.Error("Ошибка сканирования строки", zap.Error(err)) // Логируем ошибку
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
 		rates[currencyCode] = rateToUSD
 	}
 
-	logger.Info("Запрос на получение курсов завершен успешно", "op", op)
+	p.logger.Info("Запрос на получение курсов завершен успешно", zap.String("op", op))
 	return rates, nil
 }
 
@@ -39,7 +39,6 @@ func (p *PSQL) GetExchangeRates(ctx context.Context) (map[string]float32, error)
 func (p *PSQL) GetExchangeRateForCurrency(ctx context.Context, from, to string) (float32, error) {
 
 	const op = "GetExchangeRateForCurrency"
-	logger := p.logger.With("op", op)
 
 	var fromRate, toRate float32
 
@@ -54,18 +53,18 @@ func (p *PSQL) GetExchangeRateForCurrency(ctx context.Context, from, to string) 
 
 	err := p.pool.QueryRow(ctx, query, from, to).Scan(&fromRate, &toRate)
 	if err != nil {
-		logger.Error("Ошибка выполнения запроса для валютной пары", err)
+		p.logger.Error("Ошибка выполнения запроса для валютной пары", zap.Error(err))
 		return 0, fmt.Errorf("%s: ошибка получения курса для пары %s/%s: %w", op, from, to, err)
 	}
 
 	// Проверяем, что курсы были найдены
 	if fromRate == 0 || toRate == 0 {
-		logger.Error("Курс для одной из валют не найден", err)
+		p.logger.Error("Курс для одной из валют не найден", zap.Error(err))
 		return 0, fmt.Errorf("%s: курс для одной из валют (%s/%s) не найден", op, from, to)
 	}
 
 	// Вычисляем курс между валютами
 	rate := toRate / fromRate
-	logger.Info("Запрос для валютной пары завершен успешно", "op", op)
+	p.logger.Info("Запрос для валютной пары завершен успешно", zap.String("op", op))
 	return rate, nil
 }

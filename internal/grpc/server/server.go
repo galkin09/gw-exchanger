@@ -4,22 +4,22 @@ import (
 	"context"
 	"fmt"
 	pb "github.com/galkin09/proto-exchange/exchange"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"gw-exchange/internal/storages"
-	"gw-exchange/pkg/logs"
 	"net"
 )
 
 type ExchangeServer struct {
 	pb.UnimplementedExchangeServiceServer
 	storage storages.Storage
-	logger  *logs.Logger
+	logger  *zap.Logger
 }
 
-func NewExchangeServer(storage storages.Storage, logger *logs.Logger) *ExchangeServer {
+func NewExchangeServer(storage storages.Storage, logger *zap.Logger) *ExchangeServer {
 	return &ExchangeServer{
 		storage: storage,
-		logger:  logger.With("component", "grpc-server"),
+		logger:  logger,
 	}
 }
 
@@ -29,7 +29,7 @@ func (s *ExchangeServer) GetExchangeRates(ctx context.Context, _ *pb.Empty) (*pb
 
 	rates, err := s.storage.GetExchangeRates(ctx)
 	if err != nil {
-		s.logger.Error("Ошибка при получении курсов валют", err)
+		s.logger.Error("Ошибка при получении курсов валют", zap.Error(err))
 		return nil, fmt.Errorf("ошибка при получении курсов: %w", err)
 	}
 
@@ -41,11 +41,11 @@ func (s *ExchangeServer) GetExchangeRates(ctx context.Context, _ *pb.Empty) (*pb
 
 // GetExchangeRateForCurrency возвращает курс для конкретной валютной пары
 func (s *ExchangeServer) GetExchangeRateForCurrency(ctx context.Context, req *pb.CurrencyRequest) (*pb.ExchangeRateResponse, error) {
-	s.logger.Info("Запрос на получение курса для валютной пары", "from", req.FromCurrency, "to", req.ToCurrency)
+	s.logger.Info("Запрос на получение курса для валютной пары", zap.String("from", req.FromCurrency), zap.String("to", req.ToCurrency))
 
 	rate, err := s.storage.GetExchangeRateForCurrency(ctx, req.FromCurrency, req.ToCurrency)
 	if err != nil {
-		s.logger.Error("Ошибка при получении курса для валютной пары", err)
+		s.logger.Error("Ошибка при получении курса для валютной пары", zap.Error(err))
 		return nil, fmt.Errorf("ошибка при получении курса: %w", err)
 	}
 
@@ -67,7 +67,7 @@ func (s *ExchangeServer) Start(addr string) error {
 	grpcServer := grpc.NewServer()
 	pb.RegisterExchangeServiceServer(grpcServer, s)
 
-	s.logger.Info("gRPC-сервер запущен", "addr", addr)
+	s.logger.Info("gRPC-сервер запущен", zap.String("addr", addr))
 	if err := grpcServer.Serve(lis); err != nil {
 		return fmt.Errorf("ошибка при работе сервера: %w", err)
 	}

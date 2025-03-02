@@ -8,19 +8,19 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 	"gw-exchange/internal/config"
-	"gw-exchange/pkg/logs"
 	"time"
 )
 
 type PSQL struct {
 	pool    *pgxpool.Pool
 	timeout time.Duration
-	logger  *logs.Logger
+	logger  *zap.Logger
 }
 
 // NewPSQL создает новый экземпляр PSQL
-func NewPSQL(cfg config.PostgresConfig, logger *logs.Logger) (*PSQL, error) {
+func NewPSQL(cfg config.PostgresConfig, logger *zap.Logger) (*PSQL, error) {
 	// Формируем строку подключения
 	connString := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
@@ -51,27 +51,26 @@ func NewPSQL(cfg config.PostgresConfig, logger *logs.Logger) (*PSQL, error) {
 		return nil, fmt.Errorf("ошибка при подключении к базе данных: %w", err)
 	}
 
-	logger.Info("Успешное подключение к PostgreSQL", "host", cfg.Host, "db", cfg.DBName)
+	logger.Info("Успешное подключение к PostgreSQL", zap.String("host", cfg.Host), zap.String("db", cfg.DBName))
 
 	return &PSQL{
 		pool:   pool,
-		logger: logger.With("component", "postgres"),
+		logger: logger,
 	}, nil
 }
 
 func (p *PSQL) Start(ctx context.Context, url string, timeout time.Duration, migrationsPath string) error {
 	const op = "PSQL START"
-	logger := p.logger.With("op", op)
 	p.timeout = timeout
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	logger.Info("Подключаемся к базе данных", "url", url)
+	p.logger.Info("Подключаемся к базе данных", zap.String("url", url))
 
 	pool, err := pgxpool.New(ctxTimeout, url)
 	if err != nil {
-		logger.Error("Ошибка при подключении к базе данных", err)
+		p.logger.Error("Ошибка при подключении к базе данных", zap.String("url", url), zap.Error(err))
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -79,19 +78,18 @@ func (p *PSQL) Start(ctx context.Context, url string, timeout time.Duration, mig
 
 	err = p.doMigrate(url, migrationsPath)
 	if err != nil {
-		logger.Error("Ошибка при выполнении миграции", err)
+		p.logger.Error("Ошибка при выполнении миграции", zap.Error(err))
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	logger.Info("Подключение и миграция успешно завершены")
+	p.logger.Info("Подключение и миграция успешно завершены")
 	return nil
 }
 
 func (p *PSQL) doMigrate(dbURL, migrationsPath string) error {
-	const op = "PSQL.Migrate"
-
+	const op = "postgres.doMigrate"
 	if migrationsPath == "" {
-		return fmt.Errorf("%s: migrations-path is required", op)
+		return fmt.Errorf("%s: %s", op, "путь к миграциям пуст")
 	}
 
 	m, err := migrate.New("file://"+migrationsPath, dbURL)
@@ -103,7 +101,7 @@ func (p *PSQL) doMigrate(dbURL, migrationsPath string) error {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	p.logger.Info("Миграции успешно применены", "path", migrationsPath)
+	p.logger.Info("Миграции успешно применены", zap.String("path", migrationsPath))
 	return nil
 }
 

@@ -2,10 +2,11 @@ package app
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"gw-exchange/internal/config"
 	"gw-exchange/internal/grpc/server"
 	"gw-exchange/internal/storages/postgres"
-	"gw-exchange/pkg/logs"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,16 +17,18 @@ func Run() {
 	const op = "GRPC Run"
 
 	// Инициализация логгера
-	logger := logs.New(os.Stdout)
-
-	// Загрузка конфигурации из config.env
-	if err := config.LoadConfig("config.env", logger); err != nil {
-		logger.Error("Ошибка загрузки конфигурации", err)
-		os.Exit(1)
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
 	}
+	defer logger.Sync()
 
-	// Создание конфигурации
-	cfg := config.New(logger)
+	// Загрузка конфигурации
+	cfg, err := config.LoadConfig("config.env")
+	if err != nil {
+		logger.Fatal("Failed to load config", zap.Error(err))
+	}
+	logger.Info("Конфигурация загружена", zap.Any("cfg", cfg))
 
 	// Инициализация хранилища
 	storage, err := postgres.NewPSQL(cfg.Postgres, logger)
@@ -35,12 +38,12 @@ func Run() {
 
 	dbURL, err := cfg.Postgres.ConnectionURL()
 	if err != nil {
-		logger.Error("Ошибка при формировании строки подключения к базе данных", err)
+		logger.Error("Ошибка при формировании строки подключения к базе данных", zap.Error(err))
 		os.Exit(1)
 	}
 
-	if err := storage.Start(context.Background(), dbURL, time.Duration(cfg.Postgres.ConnTimeout)*time.Second, cfg.MigrationsPath); err != nil {
-		logger.Error("Ошибка при инициализации хранилища", err)
+	if err := storage.Start(context.Background(), dbURL, time.Duration(cfg.Postgres.ConnTimeout)*time.Second, cfg.Postgres.MigrationsPath); err != nil {
+		logger.Error("Ошибка при инициализации хранилища", zap.Error(err))
 		os.Exit(1)
 	}
 	defer storage.Stop()
@@ -49,7 +52,7 @@ func Run() {
 	grpcServer := server.NewExchangeServer(storage, logger)
 	go func() {
 		if err := grpcServer.Start(cfg.GRPC.ConnectionURL()); err != nil {
-			logger.Error("Ошибка при запуске gRPC-сервера", err)
+			logger.Error("Ошибка при запуске gRPC-сервера", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
